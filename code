@@ -1,0 +1,197 @@
+import javax.swing.*;
+import java.awt.*;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.Rectangle2D;
+
+public class MultiColorCircularCalculator {
+    static class RoundButton extends JButton {
+        public RoundButton(String text) {
+            super(text);
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setBorderPainted(false);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            if (getModel().isArmed()) {
+                g2.setColor(getBackground().darker());
+            } else {
+                g2.setColor(getBackground());
+            }
+            g2.fillOval(0, 0, getSize().width - 1, getSize().height - 1);
+
+            FontMetrics fm = g2.getFontMetrics();
+            Rectangle2D r = fm.getStringBounds(getText(), g2);
+            int x = (this.getWidth() - (int) r.getWidth()) / 2;
+            int y = (this.getHeight() - (int) r.getHeight()) / 2 + fm.getAscent();
+            g2.setColor(getForeground());
+            g2.drawString(getText(), x, y);
+            g2.dispose();
+        }
+
+        @Override
+        protected void paintBorder(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(getBackground().darker());
+            g2.drawOval(0, 0, getSize().width - 1, getSize().height - 1);
+            g2.dispose();
+        }
+
+        @Override
+        public boolean contains(int x, int y) {
+            return new Ellipse2D.Float(0, 0, getWidth(), getHeight()).contains(x, y);
+        }
+    }
+
+    public static void main(String[] args) {
+        JFrame f = new JFrame("Multi-Color Circular Calculator");
+        f.setSize(350, 500);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.getContentPane().setBackground(new Color(30, 50, 30)); // Dark green base
+        f.setLayout(new BorderLayout(5, 5));
+
+        JTextField display = new JTextField();
+        display.setFont(new Font("Arial", Font.BOLD, 28));
+        display.setHorizontalAlignment(JTextField.RIGHT);
+        display.setEditable(false);
+        display.setBackground(new Color(70, 80, 70));
+        display.setForeground(Color.WHITE);
+        display.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        f.add(display, BorderLayout.NORTH);
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setLayout(new GridLayout(5, 4, 10, 10));
+        buttonPanel.setBackground(new Color(30, 50, 30));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        String[] buttons = {
+                "7", "8", "9", "/",
+                "4", "5", "6", "*",
+                "1", "2", "3", "-",
+                "0", ".", "C", "+",
+                "="
+        };
+
+        final StringBuilder currentInput = new StringBuilder();
+
+        for (String text : buttons) {
+            RoundButton button = new RoundButton(text);
+            button.setFont(new Font("Arial", Font.BOLD, 20));
+            button.setPreferredSize(new Dimension(70, 70));
+
+            // Color coding
+            if (text.matches("[0-9]")) {
+                button.setBackground(new Color(0, 153, 153)); // Teal
+                button.setForeground(Color.WHITE);
+            } else if (text.equals(".")) {
+                button.setBackground(new Color(70, 130, 180)); // Steel blue
+                button.setForeground(Color.WHITE);
+            } else if (text.equals("C")) {
+                button.setBackground(new Color(200, 50, 50)); // Red
+                button.setForeground(Color.WHITE);
+            } else if (text.matches("[+\\-*/]")) {
+                button.setBackground(new Color(255, 140, 0)); // Dark orange
+                button.setForeground(Color.WHITE);
+            } else if (text.equals("=")) {
+                button.setBackground(new Color(0, 200, 0)); // Bright green
+                button.setForeground(Color.BLACK);
+            }
+
+            button.addActionListener(e -> {
+                String label = button.getText();
+
+                if (label.equals("C")) {
+                    currentInput.setLength(0);
+                    display.setText("");
+                } else if (label.equals("=")) {
+                    try {
+                        String expression = currentInput.toString();
+                        double result = eval(expression);
+                        display.setText(String.valueOf(result));
+                        currentInput.setLength(0);
+                        currentInput.append(result);
+                    } catch (Exception ex) {
+                        display.setText("Error");
+                        currentInput.setLength(0);
+                    }
+                } else {
+                    currentInput.append(label);
+                    display.setText(currentInput.toString());
+                }
+            });
+
+            buttonPanel.add(button);
+        }
+
+        f.add(buttonPanel, BorderLayout.CENTER);
+        f.setVisible(true);
+    }
+
+    public static double eval(String expr) {
+        return new Object() {
+            int pos = -1, ch;
+
+            void nextChar() {
+                ch = (++pos < expr.length()) ? expr.charAt(pos) : -1;
+            }
+
+            boolean eat(int charToEat) {
+                while (ch == ' ') nextChar();
+                if (ch == charToEat) {
+                    nextChar();
+                    return true;
+                }
+                return false;
+            }
+
+            double parse() {
+                nextChar();
+                double x = parseExpression();
+                if (pos < expr.length()) throw new RuntimeException("Unexpected: " + (char) ch);
+                return x;
+            }
+
+            double parseExpression() {
+                double x = parseTerm();
+                while (true) {
+                    if (eat('+')) x += parseTerm();
+                    else if (eat('-')) x -= parseTerm();
+                    else return x;
+                }
+            }
+
+            double parseTerm() {
+                double x = parseFactor();
+                while (true) {
+                    if (eat('*')) x *= parseFactor();
+                    else if (eat('/')) x /= parseFactor();
+                    else return x;
+                }
+            }
+
+            double parseFactor() {
+                if (eat('+')) return parseFactor();
+                if (eat('-')) return -parseFactor();
+
+                double x;
+                int startPos = this.pos;
+                if (eat('(')) {
+                    x = parseExpression();
+                    eat(')');
+                } else if ((ch >= '0' && ch <= '9') || ch == '.') {
+                    while ((ch >= '0' && ch <= '9') || ch == '.') nextChar();
+                    x = Double.parseDouble(expr.substring(startPos, this.pos));
+                } else {
+                    throw new RuntimeException("Unexpected: " + (char) ch);
+                }
+
+                return x;
+            }
+        }.parse();
+    }
+}
